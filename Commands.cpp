@@ -15,6 +15,7 @@
 #include <signal.h>
 
 #include <limits.h>
+#include <cstring>
 
 
 using namespace std;
@@ -110,15 +111,17 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     else if (firstWord.compare("cd") == 0){
         if (getplastPwd == nullptr){
             return new ChangeDirCommand(cmd_line , nullptr);
-        }
         }else {
-            return new ChangeDirCommand(cmd_line, *getplastPwd())
+            char* pwdlast = getplastPwd();
+            char** final = &pwdlast;
+            return new ChangeDirCommand(cmd_line, final);
         }
-    else {
-      return new ExternalCommand(cmd_line);
+    // else {
+    //     return new ExternalCommand(cmd_line);
+    //     }
     }
-   
     return nullptr;
+
 }
 
 
@@ -151,13 +154,52 @@ void GetCurrDirCommand::execute()
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         std::cout << cwd;
     } else {
-        perror("getcwd() error");
+        perror("smash error: getcwd failed");
     }
 }
 
-ChangeDirCommand::ChangeDirCommand(const char *cmd_line, char **plastPwd) : BuiltInCommand(cmd_line) {}
+ChangeDirCommand::ChangeDirCommand(const char *cmd_line, char **plastPwd) : BuiltInCommand(cmd_line), plastPwd(plastPwd){}
 
 void ChangeDirCommand::execute()
 {
-
+    if (argc > 2){
+        std::cout << "smash error:cd:too many arguments";
+        return;
+    }else if (argc == 1){
+        return;
+    }else if ((std::strcmp(argv[1], "-") == 0)){
+        if (plastPwd == nullptr){
+            std::cout << "smash error: cd: OLDPWD not set";
+            return;
+        }else{
+            char cwd[PATH_MAX];
+            char* curCd = getcwd(cwd, sizeof(cwd));
+            // syscall may fail
+            char** temp = &curCd;
+            const char* path = *plastPwd;
+            if (chdir(path) == 0) {
+                plastPwd = temp;
+                return;
+            } else {
+                perror("smash error: chdir failed");
+            } 
+        }
+    }else {
+         if (plastPwd == nullptr){
+            std::cout << "smash error: cd: OLDPWD not set";
+            return;
+        }else{
+            char cwd[PATH_MAX];
+            char* curCd = getcwd(cwd, sizeof(cwd));
+            // syscall may fail
+            char** temp = &curCd;
+            const char* path = *plastPwd;
+            if (chdir(path) == 0) {
+                plastPwd = temp;
+                return;
+            } else {
+                perror("smash error: chdir failed");
+            } 
+        }
+    }
 }

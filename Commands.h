@@ -97,8 +97,9 @@ public:
 
 class ChangeDirCommand : public BuiltInCommand {
 private:
-    vector<std::string>
+
 public:
+
     // TODO: Add your data members public:
     ChangeDirCommand(const char *cmd_line, char **plastPwd);
 
@@ -248,9 +249,11 @@ public:
 class SmallShell {
 private:
     // TODO: Add your data members
-    SmallShell();
+    char *plastPwd;
+    SmallShell() : plastPwd(nullptr) {}
 
 public:
+    
     Command *CreateCommand(const char *cmd_line);
 
     SmallShell(SmallShell const &) = delete; // disable copy ctor
@@ -265,6 +268,8 @@ public:
     ~SmallShell();
 
     void executeCommand(const char *cmd_line);
+
+    char* getplastPwd();
 
     // TODO: add extra methods as needed
 };

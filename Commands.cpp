@@ -7,6 +7,16 @@
 #include <iomanip>
 #include "Commands.h"
 
+
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
+
+#include <limits.h>
+
+
 using namespace std;
 
 const std::string WHITESPACE = " \n\r\t\f\v";
@@ -87,8 +97,7 @@ SmallShell::~SmallShell() {
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command *SmallShell::CreateCommand(const char *cmd_line) {
-    // For example:
-    /*
+    
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
@@ -98,14 +107,20 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     else if (firstWord.compare("showpid") == 0) {
       return new ShowPidCommand(cmd_line);
     }
-    else if ...
-    .....
+    else if (firstWord.compare("cd") == 0){
+        if (getplastPwd == nullptr){
+            return new ChangeDirCommand(cmd_line , nullptr);
+        }
+        }else {
+            return new ChangeDirCommand(cmd_line, *getplastPwd())
+        }
     else {
       return new ExternalCommand(cmd_line);
     }
-    */
+   
     return nullptr;
 }
+
 
 void SmallShell::executeCommand(const char *cmd_line) {
     // TODO: Add your implementation here
@@ -113,4 +128,36 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // Command* cmd = CreateCommand(cmd_line);
     // cmd->execute();
     // Please note that you must fork smash process for some commands (e.g., external commands....)
+}
+
+Command::Command(const char *cmd_line) : argv(nullptr), argc(-1) {
+    argc = _parseCommandLine(cmd_line, argv);
+}
+
+BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {}
+
+ShowPidCommand::ShowPidCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+
+void ShowPidCommand::execute()
+{
+    std::cout << getpid();
+}
+
+GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+
+void GetCurrDirCommand::execute()
+{
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        std::cout << cwd;
+    } else {
+        perror("getcwd() error");
+    }
+}
+
+ChangeDirCommand::ChangeDirCommand(const char *cmd_line, char **plastPwd) : BuiltInCommand(cmd_line) {}
+
+void ChangeDirCommand::execute()
+{
+
 }

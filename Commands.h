@@ -7,8 +7,10 @@
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
 
+
 class Command {
-    // TODO: Add your data members
+    char** argv;
+    int argc;
 public:
     Command(const char *cmd_line);
 
@@ -94,6 +96,9 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
+private:
+    vector<std::string>
+public:
     // TODO: Add your data members public:
     ChangeDirCommand(const char *cmd_line, char **plastPwd);
 
@@ -105,6 +110,7 @@ class ChangeDirCommand : public BuiltInCommand {
 
 class GetCurrDirCommand : public BuiltInCommand {
 public:
+    // TODO: Add your data members public:
     GetCurrDirCommand(const char *cmd_line);
 
     virtual ~GetCurrDirCommand() {

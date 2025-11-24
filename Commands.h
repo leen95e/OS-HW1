@@ -7,11 +7,13 @@
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
 
+int _parseCommandLine(const char *cmd_line, char **args);
 
 class Command {
+    
+public:
     char** argv;
     int argc;
-public:
     Command(const char *cmd_line);
 
     virtual ~Command();
@@ -27,8 +29,7 @@ class BuiltInCommand : public Command {
 public:
     BuiltInCommand(const char *cmd_line);
 
-    virtual ~BuiltInCommand() {
-    }
+    virtual ~BuiltInCommand();
 };
 
 class ExternalCommand : public Command {
@@ -97,14 +98,13 @@ public:
 
 class ChangeDirCommand : public BuiltInCommand {
 private:
-
+    char** plastPwd;
 public:
 
     // TODO: Add your data members public:
     ChangeDirCommand(const char *cmd_line, char **plastPwd);
 
-    virtual ~ChangeDirCommand() {
-    }
+    virtual ~ChangeDirCommand();
 
     void execute() override;
 };
@@ -250,7 +250,7 @@ class SmallShell {
 private:
     // TODO: Add your data members
     char *plastPwd;
-    SmallShell() : plastPwd(nullptr) {}
+    SmallShell();
 
 public:
     

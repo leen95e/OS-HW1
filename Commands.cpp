@@ -86,9 +86,7 @@ void _removeBackgroundSign(char *cmd_line) {
 
 // TODO: Add your implementation for classes in Commands.h 
 
-SmallShell::SmallShell() {
-    // TODO: add your implementation
-}
+SmallShell::SmallShell()  : plastPwd(nullptr) {}
 
 SmallShell::~SmallShell() {
     // TODO: add your implementation
@@ -109,12 +107,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
       return new ShowPidCommand(cmd_line);
     }
     else if (firstWord.compare("cd") == 0){
-        if (getplastPwd == nullptr){
+        if (getplastPwd() == nullptr){
             return new ChangeDirCommand(cmd_line , nullptr);
         }else {
-            char* pwdlast = getplastPwd();
-            char** final = &pwdlast;
-            return new ChangeDirCommand(cmd_line, final);
+            return new ChangeDirCommand(cmd_line, &plastPwd);
         }
     // else {
     //     return new ExternalCommand(cmd_line);
@@ -133,7 +129,8 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 
-Command::Command(const char *cmd_line) : argv(nullptr), argc(-1) {
+Command::Command(const char *cmd_line) : argc(-1) {
+    argv = new char*[COMMAND_MAX_ARGS];
     argc = _parseCommandLine(cmd_line, argv);
 }
 
@@ -151,7 +148,7 @@ GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_
 void GetCurrDirCommand::execute()
 {
     char cwd[PATH_MAX];
-    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
         std::cout << cwd;
     } else {
         perror("smash error: getcwd failed");
@@ -168,38 +165,71 @@ void ChangeDirCommand::execute()
     }else if (argc == 1){
         return;
     }else if ((std::strcmp(argv[1], "-") == 0)){
-        if (plastPwd == nullptr){
-            std::cout << "smash error: cd: OLDPWD not set";
-            return;
-        }else{
-            char cwd[PATH_MAX];
-            char* curCd = getcwd(cwd, sizeof(cwd));
-            // syscall may fail
-            char** temp = &curCd;
-            const char* path = *plastPwd;
-            if (chdir(path) == 0) {
-                plastPwd = temp;
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == nullptr){
+            perror("smash error: getcwd failed");
+        } else {
+            char* saved_old_path = new char[std::strlen(cwd) + 1];
+            std::strcpy(saved_old_path, cwd);
+            if (plastPwd == nullptr){
+                std::cout << "smash error: cd: OLDPWD not set";
+                *plastPwd = saved_old_path;
                 return;
-            } else {
-                perror("smash error: chdir failed");
-            } 
+            }else{
+                const char* path = *plastPwd;
+                if (chdir(path) == 0) {
+                    delete[] *plastPwd;
+                    *plastPwd = saved_old_path;
+                    return;
+                } else {
+                    delete[] saved_old_path;
+                    perror("smash error: chdir failed");
+                } 
+            }
         }
     }else {
-         if (plastPwd == nullptr){
-            std::cout << "smash error: cd: OLDPWD not set";
-            return;
-        }else{
-            char cwd[PATH_MAX];
-            char* curCd = getcwd(cwd, sizeof(cwd));
-            // syscall may fail
-            char** temp = &curCd;
-            const char* path = *plastPwd;
-            if (chdir(path) == 0) {
-                plastPwd = temp;
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL){
+            perror("smash error: getcwd failed");
+        } else {
+            char* saved_old_path = new char[std::strlen(cwd) + 1];
+            std::strcpy(saved_old_path, cwd);
+            if (plastPwd == nullptr){
+                std::cout << "smash error: cd: OLDPWD not set";
+                *plastPwd = saved_old_path;
                 return;
-            } else {
-                perror("smash error: chdir failed");
-            } 
+            }else{
+                const char* path = argv[1];
+                if (chdir(path) == 0) {
+                    delete[] *plastPwd;
+                    *plastPwd = saved_old_path;
+                    return;
+                } else {
+                    delete[] saved_old_path;
+                    perror("smash error: chdir failed");
+                } 
+            }
         }
     }
+}
+
+
+char *SmallShell::getplastPwd()
+{
+    return plastPwd;
+}
+
+Command::~Command()
+{
+
+}
+
+BuiltInCommand::~BuiltInCommand()
+{
+
+}
+
+ChangeDirCommand::~ChangeDirCommand()
+{
+
 }

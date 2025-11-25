@@ -3,6 +3,8 @@
 #define SMASH_COMMAND_H_
 
 #include <vector>
+#include <map>
+#include <memory>
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -145,16 +147,25 @@ class QuitCommand : public BuiltInCommand {
 class JobsList {
 public:
     class JobEntry {
-        // TODO: Add your data members
+    public:
+        std::string cmdLine;
+        bool isStopped;
+        Command* cmd;
+        int pid;
+    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmd(cmd),
+                             pid(pid), cmdLine(cmdLine), isStopped(0) {}
+    ~JobEntry();
     };
 
-    // TODO: Add your data members
+    std::map<int , std::unique_ptr<JobEntry>> jobMap;
+    int maxJobID;
+ 
 public:
-    JobsList();
+    JobsList() : maxJobID(0) {}
 
     ~JobsList();
 
-    void addJob(Command *cmd, bool isStopped = false);
+    void addJob(Command *cmd, int pid);
 
     void printJobsList();
 
@@ -171,12 +182,15 @@ public:
     JobEntry *getLastStoppedJob(int *jobId);
 
     // TODO: Add extra methods or modify exisitng ones as needed
+
+
 };
 
 class JobsCommand : public BuiltInCommand {
     // TODO: Add your data members
 public:
-    JobsCommand(const char *cmd_line, JobsList *jobs);
+    JobsList* jobs;
+    JobsCommand(const char *cmd_line, JobsList *jobs) : BuiltInCommand(cmd_line) , jobs(jobs) {}
 
     virtual ~JobsCommand() {
     }
@@ -196,9 +210,9 @@ public:
 };
 
 class ForegroundCommand : public BuiltInCommand {
-    // TODO: Add your data members
 public:
-    ForegroundCommand(const char *cmd_line, JobsList *jobs);
+    JobsList* jobs;
+    ForegroundCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) , jobs(jobs) {}
 
     virtual ~ForegroundCommand() {
     }

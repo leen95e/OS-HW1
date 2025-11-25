@@ -107,14 +107,8 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
       return new ShowPidCommand(cmd_line);
     }
     else if (firstWord.compare("cd") == 0){
-        if (getplastPwd() == nullptr){
-            return new ChangeDirCommand(cmd_line , nullptr);
-        }else {
             return new ChangeDirCommand(cmd_line, &plastPwd);
-        }
-    // else {
-    //     return new ExternalCommand(cmd_line);
-    //     }
+      
     }
     return nullptr;
 
@@ -122,10 +116,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    // TODO: Add your implementation here
-    // for example:
-    // Command* cmd = CreateCommand(cmd_line);
-    // cmd->execute();
+    Command* cmd = CreateCommand(cmd_line);
+    if ( cmd != nullptr){
+        cmd->execute();
+    }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 
@@ -140,7 +134,7 @@ ShowPidCommand::ShowPidCommand(const char *cmd_line) : BuiltInCommand(cmd_line) 
 
 void ShowPidCommand::execute()
 {
-    std::cout << getpid();
+    std::cout << getpid() << std::endl;
 }
 
 GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
@@ -149,7 +143,7 @@ void GetCurrDirCommand::execute()
 {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-        std::cout << cwd;
+        std::cout << cwd << std::endl;
     } else {
         perror("smash error: getcwd failed");
     }
@@ -160,7 +154,7 @@ ChangeDirCommand::ChangeDirCommand(const char *cmd_line, char **plastPwd) : Buil
 void ChangeDirCommand::execute()
 {
     if (argc > 2){
-        std::cout << "smash error:cd:too many arguments";
+        std::cout << "smash error:cd:too many arguments"<< std::endl;
         return;
     }else if (argc == 1){
         return;
@@ -171,8 +165,8 @@ void ChangeDirCommand::execute()
         } else {
             char* saved_old_path = new char[std::strlen(cwd) + 1];
             std::strcpy(saved_old_path, cwd);
-            if (plastPwd == nullptr){
-                std::cout << "smash error: cd: OLDPWD not set";
+            if (*plastPwd == nullptr){
+                std::cout << "smash error: cd: OLDPWD not set" << std::endl;
                 *plastPwd = saved_old_path;
                 return;
             }else{
@@ -194,24 +188,23 @@ void ChangeDirCommand::execute()
         } else {
             char* saved_old_path = new char[std::strlen(cwd) + 1];
             std::strcpy(saved_old_path, cwd);
-            if (plastPwd == nullptr){
-                std::cout << "smash error: cd: OLDPWD not set";
-                *plastPwd = saved_old_path;
-                return;
-            }else{
-                const char* path = argv[1];
-                if (chdir(path) == 0) {
+            const char* path = argv[1];
+            if (chdir(path) == 0) {
+                if (plastPwd == nullptr){
+                    *plastPwd = saved_old_path;
+                }else {
                     delete[] *plastPwd;
                     *plastPwd = saved_old_path;
-                    return;
-                } else {
-                    delete[] saved_old_path;
-                    perror("smash error: chdir failed");
-                } 
-            }
+                }
+                return;
+            } else {
+                delete[] saved_old_path;
+                perror("smash error: chdir failed");
+            } 
         }
     }
 }
+
 
 
 char *SmallShell::getplastPwd()
@@ -232,4 +225,63 @@ BuiltInCommand::~BuiltInCommand()
 ChangeDirCommand::~ChangeDirCommand()
 {
 
+}
+
+void JobsList::addJob(Command *cmd, int pid)
+{
+    std::unique_ptr<JobEntry> newJob = make_unique<JobEntry>(cmd, pid, cmd.getstring()); // todo get string
+    removeFinishedJobs(); // update max in this func
+    jobMap.insert(std::make_pair(maxJobID++, std::move(newJob)));
+}
+
+void JobsList::printJobsList()
+{
+    removeFinishedJobs(); // update max in this func
+    for (const auto& element : jobMap) {
+        int jobId = element.first; 
+        
+        const std::string cmdLineToPrint = (element.second)->cmdLine; 
+
+        std::cout << "[" << jobId << "] " << cmdLineToPrint << std::endl;
+    }
+}
+
+void JobsList::removeFinishedJobs()
+{
+    for (auto& element : jobMap) {
+        int jobId = element.first; 
+        if(element.second->isStopped){
+            jobMap.erase(jobId);
+        }
+    }
+    
+    maxJobID = jobMap.rbegin()->first;
+}
+
+void JobsList::removeJobById(int jobId)
+{
+    auto it = jobMap.find(jobId);
+    if (it != jobMap.end()) {
+        jobMap.erase(it);
+    }
+    maxJobID = jobMap.rbegin()->first;
+}
+
+void JobsCommand::execute()
+{
+    jobs->printJobsList();
+}
+
+void ForegroundCommand::execute()
+{
+
+}
+
+JobEntry *JobsList::getJobById(int jobId)
+{
+    auto it = jobMap.find(jobId);
+    if (it != jobMap.end()) {
+        jobMap.erase(it);
+    }
+    return nullptr;
 }

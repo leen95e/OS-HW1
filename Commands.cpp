@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdexcept>
 
 #include <limits.h>
 #include <cstring>
@@ -84,9 +85,40 @@ void _removeBackgroundSign(char *cmd_line) {
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
+
+//converts string to int 
+
+bool get_positive_integer_value_legacy(const std::string& str, int* outValue) {
+    if (str.empty() || str[0] == '-' || str[0] == '+') {
+        return false; // Fail
+    }
+    
+    try {
+        size_t last_char_idx;
+        int value = std::stoi(str, &last_char_idx);
+        // 1. Check if the entire string was consumed
+        if (last_char_idx != str.length()) {
+            return false;
+        }
+        // 2. Check if the value is strictly positive (> 0)
+        if (value > 0) {
+            *outValue = value; // Set the output parameter
+            return true;       // Success
+        } else {
+            return false; // Fail: Value is zero
+        }
+
+    } catch (const std::exception& e) {
+        return false; // Fail: Overflow or invalid format
+    }
+}
+
+
+
+
 // TODO: Add your implementation for classes in Commands.h 
 
-SmallShell::SmallShell()  : plastPwd(nullptr) {}
+SmallShell::SmallShell()  : plastPwd(nullptr), jobs(nullptr) {}
 
 SmallShell::~SmallShell() {
     // TODO: add your implementation
@@ -106,9 +138,17 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     else if (firstWord.compare("showpid") == 0) {
       return new ShowPidCommand(cmd_line);
     }
+    else if (firstWord.compare("jobs") == 0){
+        return new JobsCommand(cmd_line,jobs);
+    }
     else if (firstWord.compare("cd") == 0){
-            return new ChangeDirCommand(cmd_line, &plastPwd);
-      
+        return new ChangeDirCommand(cmd_line, &plastPwd);
+    }
+    else if (firstWord.compare("fg") == 0){
+        return new ForegroundCommand(cmd_line,jobs);
+    }
+    else if (firstWord.compare("quit") == 0){
+        return new QuitCommand(cmd_line,jobs);
     }
     return nullptr;
 
@@ -118,12 +158,14 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 void SmallShell::executeCommand(const char *cmd_line) {
     Command* cmd = CreateCommand(cmd_line);
     if ( cmd != nullptr){
+        // jobs->removeFinishedJobs(); because its null
         cmd->execute();
     }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 
-Command::Command(const char *cmd_line) : argc(-1) {
+Command::Command(const char *cmd_line) {
+    cmdString = cmd_line;
     argv = new char*[COMMAND_MAX_ARGS];
     argc = _parseCommandLine(cmd_line, argv);
 }
@@ -227,12 +269,22 @@ ChangeDirCommand::~ChangeDirCommand()
 
 }
 
+
 void JobsList::addJob(Command *cmd, int pid)
 {
-    std::unique_ptr<JobEntry> newJob = make_unique<JobEntry>(cmd, pid, cmd.getstring()); // todo get string
-    removeFinishedJobs(); // update max in this func
-    jobMap.insert(std::make_pair(maxJobID++, std::move(newJob)));
+    // 1. Get the command string properly
+    std::string comdLineString = cmd->getString(); 
+
+    // 2. Create unique_ptr using 'new'
+    std::unique_ptr<JobEntry> newJob(new JobEntry(cmd, pid, comdLineString));
+    
+    // 3. Update logic
+    removeFinishedJobs(); 
+    
+    maxJobID++; // Increment first
+    jobMap.insert(std::make_pair(maxJobID, std::move(newJob)));
 }
+
 
 void JobsList::printJobsList()
 {
@@ -273,15 +325,94 @@ void JobsCommand::execute()
 }
 
 void ForegroundCommand::execute()
-{
-
+{   
+    int value;
+    if (argc > 2){
+        std::cout << "smash error: fg: invalid arguments" << std::endl;
+        return;
+    } if (argc == 1){
+        JobsList::JobEntry* jobToFinish = jobs->getJobById(jobs->getMaxJobID());
+        if (jobToFinish == nullptr){
+            std::cout << "smash error: fg: jobs list is empty" << std::endl;
+            return;
+        }
+        int jobPID = jobToFinish->pid;
+        int status;
+        int result = waitpid(jobPID, &status, 0);
+        ///do i need to check the status?? and the result ??
+        jobs->removeJobById(jobs->getMaxJobID());
+    }  else if(get_positive_integer_value_legacy(argv[2], &value)){
+        JobsList::JobEntry* jobToFinish = jobs->getJobById(value);
+        if (jobToFinish == nullptr){
+            std::cout << "smash error: fg: job-id " << value << " does not exist" << std::endl;
+            return;
+        }
+        int jobPID = jobToFinish->pid;
+        int status;
+        pid_t result = waitpid(jobPID, &status, 0);
+        ///do i need to check the status??
+        jobs->removeJobById(value);
+    } else {
+        std::cout << "smash error: fg: invalid arguments" << std::endl;
+    }
 }
 
-JobEntry *JobsList::getJobById(int jobId)
+JobsList::JobEntry* JobsList::getJobById(int jobId)
 {
     auto it = jobMap.find(jobId);
     if (it != jobMap.end()) {
-        jobMap.erase(it);
+        return it->second.get();
+    } else {
+        return nullptr;
     }
-    return nullptr;
+}
+
+int JobsList::getMaxJobID(){
+    return maxJobID;
+}
+
+void JobsList::killAllJobs()
+{
+    std::cout << "smash: sending SIGKILL signal to " << jobMap.size() << "jobs:" << std::endl;
+    for (const auto& element : jobMap) {
+        int elemPid = (element.second)->pid;
+        const std::string cmdLineToPrint = (element.second)->cmdLine; 
+        std::cout << elemPid << ": " << cmdLineToPrint << std::endl;
+        kill(elemPid, 9); 
+    }
+}
+
+void QuitCommand::execute()
+{
+    if((std::strcmp(argv[1], "kill") == 0) && argc >=2){
+    jobs->killAllJobs();
+    }
+    exit(0);
+}
+
+// void KillCommand::execute()
+// {
+//     if(argc < 3){
+//         std::cout << "smash error: kill: invalid arguments" << std::endl;
+//         return;
+//     }
+
+//     char* signum_arg = argv[1]; 
+
+//     if (signum_arg[0] == '-') {
+//         char* signum_str = signum_arg + 1;
+//         int signum = std::stoi(signum_str);
+//     } else {
+//         std::cout << "smash error: kill: invalid arguments" << std::endl;
+//         return;
+// }
+
+std::string Command::getString()
+{
+    return cmdString;
+}
+
+JobsList::JobEntry::~JobEntry()
+{
+
 }

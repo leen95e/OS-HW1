@@ -16,11 +16,15 @@ class Command {
 public:
     char** argv;
     int argc;
+    std::string cmdString;
+
     Command(const char *cmd_line);
 
     virtual ~Command();
 
     virtual void execute() = 0;
+
+    std::string getString();
 
     //virtual void prepare();
     //virtual void cleanup();
@@ -135,8 +139,10 @@ public:
 class JobsList;
 
 class QuitCommand : public BuiltInCommand {
-    // TODO: Add your data members public:
-    QuitCommand(const char *cmd_line, JobsList *jobs);
+public:
+    JobsList *jobs;
+
+    QuitCommand(const char *cmd_line, JobsList *jobs) : BuiltInCommand(cmd_line), jobs(jobs){}
 
     virtual ~QuitCommand() {
     }
@@ -152,15 +158,14 @@ public:
         bool isStopped;
         Command* cmd;
         int pid;
-    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmd(cmd),
-                             pid(pid), cmdLine(cmdLine), isStopped(0) {}
+    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmdLine(cmdLine), isStopped(0), 
+                                                        cmd(cmd), pid(pid){}
     ~JobEntry();
     };
 
     std::map<int , std::unique_ptr<JobEntry>> jobMap;
     int maxJobID;
  
-public:
     JobsList() : maxJobID(0) {}
 
     ~JobsList();
@@ -173,7 +178,7 @@ public:
 
     void removeFinishedJobs();
 
-    JobEntry *getJobById(int jobId);
+    JobEntry* getJobById(int jobId);
 
     void removeJobById(int jobId);
 
@@ -181,15 +186,15 @@ public:
 
     JobEntry *getLastStoppedJob(int *jobId);
 
+    int getMaxJobID();
     // TODO: Add extra methods or modify exisitng ones as needed
 
 
 };
 
 class JobsCommand : public BuiltInCommand {
-    // TODO: Add your data members
-public:
     JobsList* jobs;
+public:
     JobsCommand(const char *cmd_line, JobsList *jobs) : BuiltInCommand(cmd_line) , jobs(jobs) {}
 
     virtual ~JobsCommand() {
@@ -199,9 +204,9 @@ public:
 };
 
 class KillCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* jobs;
 public:
-    KillCommand(const char *cmd_line, JobsList *jobs);
+    KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) , jobs(jobs) {}
 
     virtual ~KillCommand() {
     }
@@ -264,6 +269,7 @@ class SmallShell {
 private:
     // TODO: Add your data members
     char *plastPwd;
+    JobsList* jobs;
     SmallShell();
 
 public:

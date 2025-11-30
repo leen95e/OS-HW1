@@ -432,17 +432,71 @@ JobsList::JobEntry::~JobEntry()
 
 }
 
-bool checkComplexExternal(const char *cmd_line){
-    for (int i=0 ; i < MAX; i++){
-        if 
+bool checkComplexExternal(std::string cmd_line){
+    for (int i=0 ; i < COMMAND_MAX_LENGTH; i++){
+        if (cmd_line[i] == '?' || cmd_line[i] == '*'){
+            return true;
+        }
     }
-    return
+    return false; 
 }
 
 
 void ExternalCommand::execute()
 {
+    bool checkBg = false;
+    if(argc >= 1){
+        char* lastWord = argv[argc - 1];
     
+        while(lastWord != nullptr){
+            lastWord++;
+            if(*lastWord == '&'){
+                checkBg = true;
+            } else{
+                checkBg = false;
+            }
+        } 
+    }
+
+    if (checkComplexExternal(cmdString)){
+        char* tempArgv[4];
+        tempArgv[0] = (char*)"/bin/bash"; 
+        tempArgv[1] = (char*)"-c";
+        tempArgv[2] = const_cast<char*>(cmdString.c_str());
+        tempArgv[3] = nullptr;
+
+        pid_t pid = fork();
+
+        if (pid == 0){
+            execv("/bin/bash", tempArgv);
+            perror("smash error: execvp failed");
+            exit(1);
+        } else if (pid == -1) {
+            perror("smash error: fork failed");
+        } else {
+            if(checkBg == false){
+                wait(NULL);
+            } else {
+              jobs->addJob(this, pid);
+            }
+        }
+    
+    } else {
+        pid_t pid = fork();
+        if (pid == 0){
+            execvp(argv[0], argv);
+            perror("smash error: execvp failed");
+            exit(1);
+        } else if (pid == -1) {
+            perror("smash error: fork failed");
+        } else {
+            if(checkBg == false){
+                wait(NULL);
+            } else {
+              jobs->addJob(this, pid);
+            }
+        }
+    }
 }
 
 ExternalCommand::ExternalCommand(const char *cmd_line, JobsList *jobs) : Command(cmd_line), jobs(jobs){

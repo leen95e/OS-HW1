@@ -9,6 +9,7 @@
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
 class JobsList;
+class JobEntry;
 int _parseCommandLine(const char *cmd_line, char **args);
 
 class Command {
@@ -159,9 +160,9 @@ public:
     public:
         std::string cmdLine;
         Command* cmd;
-        int pid;
-    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmdLine(cmdLine), 
-                                                        cmd(cmd), pid(pid){}
+        pid_t pid;
+    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmd(cmd), pid(pid), cmdLine(cmdLine) {}
+                                                       
     ~JobEntry();
     };
 

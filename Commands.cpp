@@ -149,6 +149,8 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord.compare("quit") == 0){
         return new QuitCommand(cmd_line,jobs);
+    }else {
+        
     }
     return nullptr;
 
@@ -157,8 +159,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
 void SmallShell::executeCommand(const char *cmd_line) {
     Command* cmd = CreateCommand(cmd_line);
+    if (jobs != nullptr){
+        jobs->removeFinishedJobs();
+    }
     if ( cmd != nullptr){
-        // jobs->removeFinishedJobs(); because its null
         cmd->execute();
     }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
@@ -301,12 +305,14 @@ void JobsList::printJobsList()
 void JobsList::removeFinishedJobs()
 {
     for (auto& element : jobMap) {
-        int jobId = element.first; 
-        if(element.second->isStopped){
+        int jobId = element.first;
+        int pidToCheck =  element.second->pid;
+        int status;
+        int result = waitpid(pidToCheck, &status, WNOHANG);
+        if (result > 0 && (WIFEXITED(status) || WIFSIGNALED(status) || WIFSTOPPED(status))){
             jobMap.erase(jobId);
         }
     }
-    
     maxJobID = jobMap.rbegin()->first;
 }
 
@@ -337,8 +343,7 @@ void ForegroundCommand::execute()
             return;
         }
         int jobPID = jobToFinish->pid;
-        int status;
-        int result = waitpid(jobPID, &status, 0);
+        waitpid(jobPID, NULL, 0);
         ///do i need to check the status?? and the result ??
         jobs->removeJobById(jobs->getMaxJobID());
     }  else if(get_positive_integer_value_legacy(argv[2], &value)){
@@ -390,22 +395,32 @@ void QuitCommand::execute()
     exit(0);
 }
 
-// void KillCommand::execute()
-// {
-//     if(argc < 3){
-//         std::cout << "smash error: kill: invalid arguments" << std::endl;
-//         return;
-//     }
+void KillCommand::execute()
+{
+    if(argc != 3){
+        std::cout << "smash error: kill: invalid arguments" << std::endl;
+        return;
+    }
 
-//     char* signum_arg = argv[1]; 
-
-//     if (signum_arg[0] == '-') {
-//         char* signum_str = signum_arg + 1;
-//         int signum = std::stoi(signum_str);
-//     } else {
-//         std::cout << "smash error: kill: invalid arguments" << std::endl;
-//         return;
-// }
+    char* signum_arg = argv[1]; 
+    int sigNum;
+    int pidNum;
+    if (signum_arg[0] == '-' && get_positive_integer_value_legacy(argv[1]+1 , &sigNum )
+        && get_positive_integer_value_legacy(argv[2] , &pidNum )){
+        JobsList::JobEntry* jobToFinish = jobs->getJobById(pidNum);
+        if (jobToFinish == nullptr){
+            std::cout << "smash error: fg: job-id " << pidNum << " does not exist" << std::endl;
+            return;
+        }
+        if (kill(pidNum,sigNum) == -1){
+            perror("smash error: kill failed");
+        }
+        std::cout << "signal number" << sigNum << " was sent to pid " << pidNum << std::endl;  
+    } else {
+        std::cout << "smash error: kill: invalid arguments" << std::endl;
+        return;
+    }
+}
 
 std::string Command::getString()
 {
@@ -415,4 +430,20 @@ std::string Command::getString()
 JobsList::JobEntry::~JobEntry()
 {
 
+}
+
+bool checkComplexExternal(const char *cmd_line){
+    for (int i=0 ; i < MAX; i++){
+        if 
+    }
+    return
+}
+
+
+void ExternalCommand::execute()
+{
+    
+}
+
+ExternalCommand::ExternalCommand(const char *cmd_line, JobsList *jobs) : Command(cmd_line), jobs(jobs){
 }

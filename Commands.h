@@ -8,7 +8,7 @@
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
-
+class JobsList;
 int _parseCommandLine(const char *cmd_line, char **args);
 
 class Command {
@@ -39,8 +39,11 @@ public:
 };
 
 class ExternalCommand : public Command {
+
 public:
-    ExternalCommand(const char *cmd_line);
+    JobsList *jobs;
+
+    ExternalCommand(const char *cmd_line ,JobsList *jobs);
 
     virtual ~ExternalCommand() {
     }
@@ -136,7 +139,7 @@ public:
     void execute() override;
 };
 
-class JobsList;
+
 
 class QuitCommand : public BuiltInCommand {
 public:
@@ -155,10 +158,9 @@ public:
     class JobEntry {
     public:
         std::string cmdLine;
-        bool isStopped;
         Command* cmd;
         int pid;
-    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmdLine(cmdLine), isStopped(0), 
+    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmdLine(cmdLine), 
                                                         cmd(cmd), pid(pid){}
     ~JobEntry();
     };

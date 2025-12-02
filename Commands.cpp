@@ -17,7 +17,8 @@
 
 #include <limits.h>
 #include <cstring>
-
+#include <list>
+#include <regex>
 
 using namespace std;
 
@@ -158,6 +159,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
 
 void SmallShell::executeCommand(const char *cmd_line) {
+    
     Command* cmd = CreateCommand(cmd_line);
     if (jobs != nullptr){
         jobs->removeFinishedJobs();
@@ -418,7 +420,6 @@ void KillCommand::execute()
         std::cout << "signal number" << sigNum << " was sent to pid " << pidNum << std::endl;  
     } else {
         std::cout << "smash error: kill: invalid arguments" << std::endl;
-        return;
     }
 }
 
@@ -501,3 +502,38 @@ void ExternalCommand::execute()
 
 ExternalCommand::ExternalCommand(const char *cmd_line, JobsList *jobs) : Command(cmd_line), jobs(jobs){
 }
+
+AliasCommand::AliasCommand(const char *cmd_line, std::map<std::string, std::string> *aliasMap,
+                         std::list<std::string> *aliasList) : Command(cmd_line), aliasMap(aliasMap), aliasList(aliasList){}
+
+void AliasCommand::execute()
+{
+    std::list<std::string> keyWords = {"chprompt", "showpid", "pwd", "cd", "jobs", "fg", 
+                                        "quit", "kill", "alias", "unalias", "unsetenv", "sysinfo"};
+    const std::regex alias_pattern("^alias [a-zA-Z0-9_]+='[^']*'$");
+    if (std::regex_match(_trim(cmdString), alias_pattern)) {
+        if (argc == 1){
+            for (const auto& element : *aliasList){
+                std::cout <<  element << std::endl;
+            }        
+        }
+        int equalsPos = cmdString.find('=');
+        std::string name = cmdString.substr(6, equalsPos - 6);
+        int quoteStart = equalsPos + 2; 
+        int quoteEnd = cmdString.length() - 1;
+        std::string commandName = cmdString.substr(quoteStart, quoteEnd - quoteStart);
+        for (const auto& element : keyWords){
+            if(element.compare(name)){
+                std::cout << "smash error: alias: " << name << " already exists or is a reserved command" << std::endl;
+            } 
+        }
+        if (aliasMap->find(name) != aliasMap->end()){
+            std::cout << "smash error: alias: " << name << " already exists or is a reserved command" << std::endl;
+        }
+        aliasMap->insert(std::make_pair(name, commandName));
+        aliasList->push_back(argv[1]);
+    } else {
+        std::cout << "smash error: alias: invalid alias format" << std::endl;
+    }
+}
+

@@ -230,7 +230,10 @@ public:
 
 class AliasCommand : public BuiltInCommand {
 public:
-    AliasCommand(const char *cmd_line);
+    std::map<std::string, std::string> *aliasMap;
+    std::list<std::string> *aliasList;
+    AliasCommand(const char *cmd_line , std::map<std::string , std::string>* aliasMap,
+                    std::list<std::string>* aliasList );
 
     virtual ~AliasCommand() {
     }
@@ -273,6 +276,8 @@ private:
     // TODO: Add your data members
     char *plastPwd;
     JobsList* jobs;
+    std::map<std::string , std::string> aliasMap;
+    std::list<std::string> aliasList;
     SmallShell();
 
 public:

@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <list>
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -19,7 +20,7 @@ public:
     int argc;
     std::string cmdString;
 
-    Command(const char *cmd_line);
+    Command(const char *cmd_line, std::string cmdString);
 
     virtual ~Command();
 
@@ -34,7 +35,7 @@ public:
 
 class BuiltInCommand : public Command {
 public:
-    BuiltInCommand(const char *cmd_line);
+    BuiltInCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~BuiltInCommand();
 };
@@ -43,8 +44,10 @@ class ExternalCommand : public Command {
 
 public:
     JobsList *jobs;
+    bool isBg;
+    std::string realCommand;
 
-    ExternalCommand(const char *cmd_line ,JobsList *jobs);
+    ExternalCommand(const char *cmd_line, std::string cmdString, JobsList *jobs, bool isBg);
 
     virtual ~ExternalCommand() {
     }
@@ -112,7 +115,7 @@ private:
 public:
 
     // TODO: Add your data members public:
-    ChangeDirCommand(const char *cmd_line, char **plastPwd);
+    ChangeDirCommand(const char *cmd_line, std::string cmdString, char **plastPwd);
 
     virtual ~ChangeDirCommand();
 
@@ -122,7 +125,7 @@ public:
 class GetCurrDirCommand : public BuiltInCommand {
 public:
     // TODO: Add your data members public:
-    GetCurrDirCommand(const char *cmd_line);
+    GetCurrDirCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~GetCurrDirCommand() {
     }
@@ -132,7 +135,7 @@ public:
 
 class ShowPidCommand : public BuiltInCommand {
 public:
-    ShowPidCommand(const char *cmd_line);
+    ShowPidCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~ShowPidCommand() {
     }
@@ -146,8 +149,7 @@ class QuitCommand : public BuiltInCommand {
 public:
     JobsList *jobs;
 
-    QuitCommand(const char *cmd_line, JobsList *jobs) : BuiltInCommand(cmd_line), jobs(jobs){}
-
+    QuitCommand(const char *cmd_line, std::string cmdString, JobsList *jobs);
     virtual ~QuitCommand() {
     }
 
@@ -161,7 +163,7 @@ public:
         std::string cmdLine;
         Command* cmd;
         pid_t pid;
-    JobEntry(Command* cmd, int pid, std::string cmdLine) : cmd(cmd), pid(pid), cmdLine(cmdLine) {}
+    JobEntry(Command* cmd, int pid, std::string cmdLine);
                                                        
     ~JobEntry();
     };
@@ -198,7 +200,7 @@ public:
 class JobsCommand : public BuiltInCommand {
     JobsList* jobs;
 public:
-    JobsCommand(const char *cmd_line, JobsList *jobs) : BuiltInCommand(cmd_line) , jobs(jobs) {}
+    JobsCommand(const char *cmd_line, std::string cmdString, JobsList *jobs);
 
     virtual ~JobsCommand() {
     }
@@ -209,7 +211,7 @@ public:
 class KillCommand : public BuiltInCommand {
     JobsList* jobs;
 public:
-    KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) , jobs(jobs) {}
+    KillCommand(const char *cmd_line, std::string cmdString, JobsList *jobs);
 
     virtual ~KillCommand() {
     }
@@ -220,7 +222,7 @@ public:
 class ForegroundCommand : public BuiltInCommand {
 public:
     JobsList* jobs;
-    ForegroundCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) , jobs(jobs) {}
+    ForegroundCommand(const char *cmd_line, std::string cmdString, JobsList *jobs);
 
     virtual ~ForegroundCommand() {
     }
@@ -232,7 +234,7 @@ class AliasCommand : public BuiltInCommand {
 public:
     std::map<std::string, std::string> *aliasMap;
     std::list<std::string> *aliasList;
-    AliasCommand(const char *cmd_line , std::map<std::string , std::string>* aliasMap,
+    AliasCommand(const char *cmd_line, std::string cmdString, std::map<std::string , std::string>* aliasMap,
                     std::list<std::string>* aliasList );
 
     virtual ~AliasCommand() {
@@ -243,7 +245,9 @@ public:
 
 class UnAliasCommand : public BuiltInCommand {
 public:
-    UnAliasCommand(const char *cmd_line);
+    std::map<std::string, std::string> *aliasMap;
+    std::list<std::string> *aliasList;
+    UnAliasCommand(const char *cmd_line, std::string cmdString, std::map<std::string, std::string>* aliasMap, std::list<std::string>* aliasList);
 
     virtual ~UnAliasCommand() {
     }
@@ -279,7 +283,6 @@ private:
     std::map<std::string , std::string> aliasMap;
     std::list<std::string> aliasList;
     SmallShell();
-
 public:
     
     Command *CreateCommand(const char *cmd_line);

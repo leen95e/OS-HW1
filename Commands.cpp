@@ -17,7 +17,6 @@
 
 #include <limits.h>
 #include <cstring>
-#include <list>
 #include <regex>
 
 using namespace std;
@@ -118,40 +117,68 @@ bool get_positive_integer_value_legacy(const std::string& str, int* outValue) {
 
 
 // TODO: Add your implementation for classes in Commands.h 
+SmallShell::SmallShell(): plastPwd(nullptr), aliasMap(), aliasList() {
+        jobs = new JobsList();
+}
 
-SmallShell::SmallShell()  : plastPwd(nullptr), jobs(nullptr) {}
+
 
 SmallShell::~SmallShell() {
-    // TODO: add your implementation
+    delete jobs; // <--- ADD THIS LINE
+    // You should also delete plastPwd if it's not null and was allocated with new char[]
+    if (plastPwd != nullptr) {
+        delete[] plastPwd;  
+    }
 }
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command *SmallShell::CreateCommand(const char *cmd_line) {
-    
-    string cmd_s = _trim(string(cmd_line));
-    string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
-
+    std::string ogCommand = cmd_line;
+    string commandLine = _trim(string(cmd_line));
+    string firstWord = commandLine.substr(0, commandLine.find_first_of(" \n"));
+    auto it = aliasMap.find(firstWord);
+    if (it != aliasMap.end()) {
+        commandLine.replace(0, commandLine.find(' '), it->second);
+        string cmd_s = _trim(string(commandLine));
+        firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+    };
     if (firstWord.compare("pwd") == 0) {
-      return new GetCurrDirCommand(cmd_line);
+      return new GetCurrDirCommand(commandLine.c_str(), ogCommand);
     }
     else if (firstWord.compare("showpid") == 0) {
-      return new ShowPidCommand(cmd_line);
+      return new ShowPidCommand(commandLine.c_str(), ogCommand);
     }
     else if (firstWord.compare("jobs") == 0){
-        return new JobsCommand(cmd_line,jobs);
+        return new JobsCommand(commandLine.c_str(), ogCommand, jobs);
     }
     else if (firstWord.compare("cd") == 0){
-        return new ChangeDirCommand(cmd_line, &plastPwd);
+        return new ChangeDirCommand(commandLine.c_str(), ogCommand, &plastPwd);
     }
     else if (firstWord.compare("fg") == 0){
-        return new ForegroundCommand(cmd_line,jobs);
+        return new ForegroundCommand(commandLine.c_str(), ogCommand, jobs);
     }
     else if (firstWord.compare("quit") == 0){
-        return new QuitCommand(cmd_line,jobs);
-    }else {
-        
+        return new QuitCommand(commandLine.c_str(), ogCommand, jobs);
+    }
+    else if (firstWord.compare("kill") == 0){
+        return new KillCommand(commandLine.c_str(), ogCommand, jobs);
+    }
+    else if (firstWord.compare("alias") == 0){
+        return new AliasCommand(commandLine.c_str(), ogCommand, &aliasMap, &aliasList);
+    }
+    else if (firstWord.compare("unalias") == 0){
+        return new UnAliasCommand(commandLine.c_str(), ogCommand, &aliasMap, &aliasList);
+    }
+    else {
+        bool checkBg = _isBackgroundComamnd(commandLine.c_str());
+        std::string trimmed_cmd = _rtrim(commandLine);
+        if(checkBg == true){
+            trimmed_cmd.pop_back(); // Removes the last character ('&')
+            commandLine = trimmed_cmd;
+        }
+        return new ExternalCommand(commandLine.c_str(), ogCommand, jobs, checkBg);
     }
     return nullptr;
 
@@ -159,7 +186,6 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    
     Command* cmd = CreateCommand(cmd_line);
     if (jobs != nullptr){
         jobs->removeFinishedJobs();
@@ -170,22 +196,21 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 
-Command::Command(const char *cmd_line) {
-    cmdString = cmd_line;
+Command::Command(const char *cmd_line, std::string cmdString): cmdString(cmdString) {
     argv = new char*[COMMAND_MAX_ARGS];
     argc = _parseCommandLine(cmd_line, argv);
 }
 
-BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {}
+BuiltInCommand::BuiltInCommand(const char *cmd_line, std::string cmdString) : Command(cmd_line, cmdString) {}
 
-ShowPidCommand::ShowPidCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+ShowPidCommand::ShowPidCommand(const char *cmd_line, std::string cmdString) : BuiltInCommand(cmd_line, cmdString) {}
 
 void ShowPidCommand::execute()
 {
     std::cout << getpid() << std::endl;
 }
 
-GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line) : BuiltInCommand(cmd_line) {}
+GetCurrDirCommand::GetCurrDirCommand(const char *cmd_line, std::string cmdString) : BuiltInCommand(cmd_line, cmdString) {}
 
 void GetCurrDirCommand::execute()
 {
@@ -197,7 +222,7 @@ void GetCurrDirCommand::execute()
     }
 }
 
-ChangeDirCommand::ChangeDirCommand(const char *cmd_line, char **plastPwd) : BuiltInCommand(cmd_line), plastPwd(plastPwd){}
+ChangeDirCommand::ChangeDirCommand(const char *cmd_line, std::string cmdString, char **plastPwd) : BuiltInCommand(cmd_line, cmdString), plastPwd(plastPwd){}
 
 void ChangeDirCommand::execute()
 {
@@ -262,8 +287,15 @@ char *SmallShell::getplastPwd()
 
 Command::~Command()
 {
-
+    for (int i = 0; i < argc; ++i) {
+        if (argv[i] != nullptr) {
+            free(argv[i]); // Must use free() since malloc() was used
+        }
+    }
+    // 2. Delete the array of pointers (allocated with new char*[] in Command::Command)
+    delete[] argv;
 }
+
 
 BuiltInCommand::~BuiltInCommand()
 {
@@ -294,7 +326,10 @@ void JobsList::addJob(Command *cmd, int pid)
 
 void JobsList::printJobsList()
 {
-    removeFinishedJobs(); // update max in this func
+    removeFinishedJobs();
+    if (jobMap.size() == 0){
+        return;
+    } // update max in this func
     for (const auto& element : jobMap) {
         int jobId = element.first; 
         
@@ -306,6 +341,9 @@ void JobsList::printJobsList()
 
 void JobsList::removeFinishedJobs()
 {
+    if (jobMap.size() == 0){
+        return;
+    }
     for (auto& element : jobMap) {
         int jobId = element.first;
         int pidToCheck =  element.second->pid;
@@ -315,6 +353,10 @@ void JobsList::removeFinishedJobs()
             jobMap.erase(jobId);
         }
     }
+    if (jobMap.size() == 0){
+        maxJobID = 0;
+        return;
+    }
     maxJobID = jobMap.rbegin()->first;
 }
 
@@ -323,6 +365,10 @@ void JobsList::removeJobById(int jobId)
     auto it = jobMap.find(jobId);
     if (it != jobMap.end()) {
         jobMap.erase(it);
+    }
+    if (jobMap.size() == 0){
+        maxJobID = 0;
+        return;
     }
     maxJobID = jobMap.rbegin()->first;
 }
@@ -345,10 +391,10 @@ void ForegroundCommand::execute()
             return;
         }
         int jobPID = jobToFinish->pid;
+        std::cout << jobToFinish->cmdLine << " " << jobPID << std::endl;
         waitpid(jobPID, NULL, 0);
-        ///do i need to check the status?? and the result ??
         jobs->removeJobById(jobs->getMaxJobID());
-    }  else if(get_positive_integer_value_legacy(argv[2], &value)){
+    }  else if(get_positive_integer_value_legacy(argv[1], &value)){
         JobsList::JobEntry* jobToFinish = jobs->getJobById(value);
         if (jobToFinish == nullptr){
             std::cout << "smash error: fg: job-id " << value << " does not exist" << std::endl;
@@ -356,8 +402,8 @@ void ForegroundCommand::execute()
         }
         int jobPID = jobToFinish->pid;
         int status;
+        std::cout << jobToFinish->cmdLine << " " << jobPID << std::endl;
         pid_t result = waitpid(jobPID, &status, 0);
-        ///do i need to check the status??
         jobs->removeJobById(value);
     } else {
         std::cout << "smash error: fg: invalid arguments" << std::endl;
@@ -380,7 +426,7 @@ int JobsList::getMaxJobID(){
 
 void JobsList::killAllJobs()
 {
-    std::cout << "smash: sending SIGKILL signal to " << jobMap.size() << "jobs:" << std::endl;
+    std::cout << "smash: sending SIGKILL signal to " << jobMap.size() << " jobs:" << std::endl;
     for (const auto& element : jobMap) {
         int elemPid = (element.second)->pid;
         const std::string cmdLineToPrint = (element.second)->cmdLine; 
@@ -392,8 +438,9 @@ void JobsList::killAllJobs()
 void QuitCommand::execute()
 {
     if((std::strcmp(argv[1], "kill") == 0) && argc >=2){
-    jobs->killAllJobs();
+        jobs->killAllJobs();
     }
+    //neeed to call al destructors
     exit(0);
 }
 
@@ -406,18 +453,18 @@ void KillCommand::execute()
 
     char* signum_arg = argv[1]; 
     int sigNum;
-    int pidNum;
+    int jobpidNum;
     if (signum_arg[0] == '-' && get_positive_integer_value_legacy(argv[1]+1 , &sigNum )
-        && get_positive_integer_value_legacy(argv[2] , &pidNum )){
-        JobsList::JobEntry* jobToFinish = jobs->getJobById(pidNum);
+        && get_positive_integer_value_legacy(argv[2] , &jobpidNum )){
+        JobsList::JobEntry* jobToFinish = jobs->getJobById(jobpidNum);
         if (jobToFinish == nullptr){
-            std::cout << "smash error: fg: job-id " << pidNum << " does not exist" << std::endl;
+            std::cout << "smash error: fg: job-id " << jobpidNum << " does not exist" << std::endl;
             return;
         }
-        if (kill(pidNum,sigNum) == -1){
+        if (kill(jobToFinish->pid,sigNum) == -1){
             perror("smash error: kill failed");
         }
-        std::cout << "signal number" << sigNum << " was sent to pid " << pidNum << std::endl;  
+        std::cout << "signal number " << sigNum << " was sent to pid " << jobToFinish->pid << std::endl;  
     } else {
         std::cout << "smash error: kill: invalid arguments" << std::endl;
     }
@@ -445,38 +492,29 @@ bool checkComplexExternal(std::string cmd_line){
 
 void ExternalCommand::execute()
 {
-    bool checkBg = false;
-    if(argc >= 1){
-        char* lastWord = argv[argc - 1];
-    
-        while(lastWord != nullptr){
-            lastWord++;
-            if(*lastWord == '&'){
-                checkBg = true;
-            } else{
-                checkBg = false;
-            }
-        } 
-    }
-
+    string trimmed_cmd = _rtrim(realCommand.c_str());
     if (checkComplexExternal(cmdString)){
         char* tempArgv[4];
         tempArgv[0] = (char*)"/bin/bash"; 
         tempArgv[1] = (char*)"-c";
-        tempArgv[2] = const_cast<char*>(cmdString.c_str());
+        tempArgv[2] = const_cast<char*>(trimmed_cmd.c_str());
         tempArgv[3] = nullptr;
 
         pid_t pid = fork();
 
         if (pid == 0){
-            execv("/bin/bash", tempArgv);
-            perror("smash error: execvp failed");
-            exit(1);
-        } else if (pid == -1) {
+            setpgrp();
+            if (execv("/bin/bash", tempArgv) < 0){
+                perror("smash error: execv failed");
+                exit(1);
+            }
+
+        } else if (pid < 0) {
             perror("smash error: fork failed");
+            return;
         } else {
-            if(checkBg == false){
-                wait(NULL);
+            if(isBg == false){
+                waitpid(pid, NULL,0);
             } else {
               jobs->addJob(this, pid);
             }
@@ -485,14 +523,16 @@ void ExternalCommand::execute()
     } else {
         pid_t pid = fork();
         if (pid == 0){
-            execvp(argv[0], argv);
-            perror("smash error: execvp failed");
-            exit(1);
+            setpgrp();
+            if (execvp(argv[0], argv)){
+                perror("smash error: execvp failed");
+                exit(1);
+            }
         } else if (pid == -1) {
             perror("smash error: fork failed");
         } else {
-            if(checkBg == false){
-                wait(NULL);
+            if(isBg == false){
+                waitpid(pid, NULL,0);
             } else {
               jobs->addJob(this, pid);
             }
@@ -500,40 +540,86 @@ void ExternalCommand::execute()
     }
 }
 
-ExternalCommand::ExternalCommand(const char *cmd_line, JobsList *jobs) : Command(cmd_line), jobs(jobs){
+ExternalCommand::ExternalCommand(const char *cmd_line, std::string cmdString, JobsList *jobs, bool isBg) : Command(cmd_line, cmdString), jobs(jobs), isBg(isBg), realCommand(cmd_line){
 }
 
-AliasCommand::AliasCommand(const char *cmd_line, std::map<std::string, std::string> *aliasMap,
-                         std::list<std::string> *aliasList) : Command(cmd_line), aliasMap(aliasMap), aliasList(aliasList){}
+AliasCommand::AliasCommand(const char *cmd_line, std::string cmdString, std::map<std::string, std::string> *aliasMap,
+                         std::list<std::string> *aliasList) : BuiltInCommand(cmd_line, cmdString), aliasMap(aliasMap), aliasList(aliasList){}
 
 void AliasCommand::execute()
 {
     std::list<std::string> keyWords = {"chprompt", "showpid", "pwd", "cd", "jobs", "fg", 
                                         "quit", "kill", "alias", "unalias", "unsetenv", "sysinfo"};
     const std::regex alias_pattern("^alias [a-zA-Z0-9_]+='[^']*'$");
-    if (std::regex_match(_trim(cmdString), alias_pattern)) {
-        if (argc == 1){
+    if (argc == 1){
             for (const auto& element : *aliasList){
                 std::cout <<  element << std::endl;
-            }        
-        }
+            }
+        return;        
+    }
+    if (std::regex_match(_trim(cmdString), alias_pattern)) {
         int equalsPos = cmdString.find('=');
         std::string name = cmdString.substr(6, equalsPos - 6);
         int quoteStart = equalsPos + 2; 
         int quoteEnd = cmdString.length() - 1;
         std::string commandName = cmdString.substr(quoteStart, quoteEnd - quoteStart);
         for (const auto& element : keyWords){
-            if(element.compare(name)){
+            if(element.compare(name) == 0){
                 std::cout << "smash error: alias: " << name << " already exists or is a reserved command" << std::endl;
+                return;
             } 
         }
         if (aliasMap->find(name) != aliasMap->end()){
-            std::cout << "smash error: alias: " << name << " already exists or is a reserved command" << std::endl;
+            std::cout << "ssmash error: alias: " << name << " already exists or is a reserved command" << std::endl;
+            return;
         }
         aliasMap->insert(std::make_pair(name, commandName));
-        aliasList->push_back(argv[1]);
+        aliasList->push_back(cmdString.substr(6, cmdString.size()));
     } else {
         std::cout << "smash error: alias: invalid alias format" << std::endl;
+        return;
     }
 }
 
+QuitCommand::QuitCommand(const char *cmd_line, std::string cmdString, JobsList *jobs): BuiltInCommand(cmd_line, cmdString), jobs(jobs){}
+
+JobsList::JobEntry::JobEntry(Command *cmd, int pid, std::string cmdLine): cmd(cmd), pid(pid), cmdLine(cmdLine){}
+
+JobsCommand::JobsCommand(const char * cmd_line, std::string cmdString, JobsList * jobs): BuiltInCommand(cmd_line, cmdString), jobs(jobs) {}
+
+KillCommand::KillCommand(const char *cmd_line, std::string cmdString, JobsList *jobs): BuiltInCommand(cmd_line, cmdString), jobs(jobs){}
+
+ForegroundCommand::ForegroundCommand(const char *cmd_line, std::string cmdString, JobsList *jobs):  BuiltInCommand(cmd_line, cmdString), jobs(jobs){}
+
+UnAliasCommand::UnAliasCommand(const char *cmd_line, std::string cmdString, std::map<std::string , std::string>* aliasMap ,
+                            std::list<std::string>* aliasList) : BuiltInCommand(cmd_line, cmdString), aliasMap(aliasMap), aliasList(aliasList) {}
+
+void UnAliasCommand::execute()
+{
+    if(argc < 2){
+        std::cerr << "smash error: unalias: not enough arguments" << std::endl;
+    }
+    for(int i = 1 ; i < argc ; i++){
+        auto it = aliasMap->find(argv[i]);
+        if(it == aliasMap->end()){
+            std::cerr << "smash error: unalias: " << argv[i] << " does not exist" << std::endl;
+            return;
+        } else {
+            std::string full_definition = it->first + "='" + it->second + "'";
+            for (auto list_it = aliasList->begin(); list_it != aliasList->end();) {
+                if (*list_it == full_definition) {
+                    list_it = aliasList->erase(list_it); 
+                    break; 
+                } else {
+                    ++list_it;
+                }
+            }
+        }
+        aliasMap->erase(argv[i]);
+    }
+}
+
+JobsList::~JobsList()
+{
+
+}

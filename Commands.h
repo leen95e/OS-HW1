@@ -9,6 +9,8 @@
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
+#define BUFFER_MAX 4096
+
 class JobsList;
 class JobEntry;
 int _parseCommandLine(const char *cmd_line, char **args);
@@ -257,7 +259,7 @@ public:
 
 class UnSetEnvCommand : public BuiltInCommand {
 public:
-    UnSetEnvCommand(const char *cmd_line);
+    UnSetEnvCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~UnSetEnvCommand() {
     }
@@ -267,10 +269,11 @@ public:
 
 class SysInfoCommand : public BuiltInCommand {
 public:
-    SysInfoCommand(const char *cmd_line);
+    SysInfoCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~SysInfoCommand() {
     }
+    int read_from_file(const char* filepath, char* buffer, size_t size);
 
     void execute() override;
 };

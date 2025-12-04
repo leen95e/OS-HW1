@@ -19,6 +19,10 @@
 #include <cstring>
 #include <regex>
 
+
+#include <time.h>    // For localtime, strftime, time
+#include <stdlib.h>  // For atof
+
 using namespace std;
 
 const std::string WHITESPACE = " \n\r\t\f\v";
@@ -170,6 +174,12 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord.compare("unalias") == 0){
         return new UnAliasCommand(commandLine.c_str(), ogCommand, &aliasMap, &aliasList);
+    }
+    else if (firstWord.compare("unsetenv") == 0){
+        return new UnSetEnvCommand(commandLine.c_str(), ogCommand);
+    }
+    else if (firstWord.compare("sysinfo") == 0){
+        return new SysInfoCommand(commandLine.c_str(), ogCommand);
     }
     else {
         bool checkBg = _isBackgroundComamnd(commandLine.c_str());
@@ -403,7 +413,7 @@ void ForegroundCommand::execute()
         int jobPID = jobToFinish->pid;
         int status;
         std::cout << jobToFinish->cmdLine << " " << jobPID << std::endl;
-        pid_t result = waitpid(jobPID, &status, 0);
+        waitpid(jobPID, &status, 0);
         jobs->removeJobById(value);
     } else {
         std::cout << "smash error: fg: invalid arguments" << std::endl;
@@ -622,4 +632,131 @@ void UnAliasCommand::execute()
 JobsList::~JobsList()
 {
 
+}
+
+UnSetEnvCommand::UnSetEnvCommand(const char *cmd_line, std::string cmdString) : BuiltInCommand(cmd_line, cmdString){}
+
+void UnSetEnvCommand::execute()
+{
+    if (argc < 2) {
+        std::cout << "smash error: unsetenv: not enough arguments" << std::endl;
+        return;
+    }
+    std::string path = "/proc/" + to_string(getpid()) + "/environ";
+    int fd = open(path.c_str(),O_RDONLY);
+    if (fd == -1) {
+        perror("smash error: open failed");
+        return;
+    }
+    char buffer[BUFFER_MAX];
+    int bytesRead = read(fd, buffer, BUFFER_MAX);
+    if (bytesRead < 0){
+        perror("smash error: read failed");
+        if (close(fd) < 0){
+            perror("smash error: read failed");
+        }
+        return;
+    }
+    if (close(fd) < 0){
+        perror("smash error: read failed");
+        return;
+    }
+    for (int i = 1; i < argc; ++i) {
+        int index = 0;
+        bool foundIt = 0;
+        while (index < bytesRead){
+            string toCheck = &buffer[index];
+            size_t equal = toCheck.find('=');
+            if (equal != string::npos){
+                string isValid = toCheck.substr(0, equal);
+                if (isValid.compare(argv[i]) == 0){
+                    foundIt = 1;
+                    break;
+                }
+            }
+            index += toCheck.size() + 1;
+        }
+        if (foundIt == false){
+            cerr << "smash error: unsetenv: " << argv[i] << " does not exist" << endl;
+            return;
+        }
+        int pos = -1;
+        int varNameSize = strlen(argv[i]);
+        for (int j = 0; __environ[j]; i++){
+            if((strncmp(argv[j], __environ[j], varNameSize) == 0) && (__environ[j][varNameSize] == '=')){
+                pos = j;
+                break;
+            }
+        }
+        for (int j = pos; __environ[j+1]; i++){
+            __environ[j] =  __environ[j+1];
+        }
+    }
+}
+
+SysInfoCommand::SysInfoCommand(const char *cmd_line, std::string cmdString) : BuiltInCommand(cmd_line, cmdString){}
+
+int SysInfoCommand::read_from_file(const char* filepath, char* buffer, size_t size) {
+    int fd = open(filepath, O_RDONLY);
+    if (fd < 0) {
+        return -1; 
+    }
+
+    ssize_t bytes_read = read(fd, buffer, size - 1);
+    if (bytes_read < 0) {
+        close(fd);
+        return -1;
+    }
+
+    buffer[bytes_read] = '\0'; 
+    
+    if (bytes_read > 0 && buffer[bytes_read - 1] == '\n') {
+        buffer[bytes_read - 1] = '\0';
+    }
+
+    close(fd);
+    return bytes_read;
+}
+
+void SysInfoCommand::execute() {
+    char buffer[BUFFER_MAX];
+
+    if (read_from_file("/proc/sys/kernel/ostype", buffer, sizeof(buffer)) < 0) {
+        perror("smash error: open failed"); 
+        return;
+    }
+    std::cout << "System: " << buffer << std::endl;
+
+    if (read_from_file("/proc/sys/kernel/hostname", buffer, sizeof(buffer)) < 0) {
+        perror("smash error: open failed");
+        return;
+    }
+    std::cout << "Hostname: " << buffer << std::endl;
+
+    if (read_from_file("/proc/sys/kernel/osrelease", buffer, sizeof(buffer)) < 0) {
+        perror("smash error: open failed");
+        return;
+    }
+    std::cout << "Kernel: " << buffer << std::endl;
+
+    std::cout << "Architecture: x86_64" << std::endl;
+
+    if (read_from_file("/proc/uptime", buffer, sizeof(buffer)) < 0) {
+        perror("smash error: open failed");
+        return;
+    }
+    //////////////////////////////// time //////////////////
+    char* space_pos = strchr(buffer, ' ');
+    if (space_pos != NULL) {
+        *space_pos = '\0';
+    }
+
+    double uptime_seconds = atof(buffer); // המרה למספר
+    time_t current_time = time(NULL);
+    time_t boot_time_t = current_time - (time_t)uptime_seconds;
+    struct tm* boot_tm = localtime(&boot_time_t);
+    char time_buffer[80];
+    
+    strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", boot_tm);
+    std::cout << "Boot Time: " << time_buffer << std::endl;
 }

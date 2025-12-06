@@ -48,8 +48,9 @@ public:
     JobsList *jobs;
     bool isBg;
     std::string realCommand;
+    int* fgPID;
 
-    ExternalCommand(const char *cmd_line, std::string cmdString, JobsList *jobs, bool isBg);
+    ExternalCommand(const char *cmd_line, std::string cmdString, JobsList *jobs, bool isBg, int* fgPID);
 
     virtual ~ExternalCommand() {
     }
@@ -59,9 +60,12 @@ public:
 
 
 class RedirectionCommand : public Command {
-    // TODO: Add your data members
 public:
-    explicit RedirectionCommand(const char *cmd_line);
+    std::string commandLine;
+    std::string filePath;
+    bool isOverride ;
+
+    RedirectionCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~RedirectionCommand() {
     }
@@ -70,9 +74,12 @@ public:
 };
 
 class PipeCommand : public Command {
-    // TODO: Add your data members
 public:
-    PipeCommand(const char *cmd_line);
+    std::string command1;
+    std::string command2;
+    bool isBg;
+
+    PipeCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~PipeCommand() {
     }
@@ -82,17 +89,20 @@ public:
 
 class DiskUsageCommand : public Command {
 public:
-    DiskUsageCommand(const char *cmd_line);
+    bool isError;
+    DiskUsageCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~DiskUsageCommand() {
     }
+
+    int recursivelyGetUsage(std::string path);
 
     void execute() override;
 };
 
 class WhoAmICommand : public Command {
 public:
-    WhoAmICommand(const char *cmd_line);
+    WhoAmICommand(const char *cmd_line, std::string cmdString);
 
     virtual ~WhoAmICommand() {
     }
@@ -103,7 +113,7 @@ public:
 class USBInfoCommand : public Command {
     // TODO: Add your data members **BONUS: 10 Points**
 public:
-    USBInfoCommand(const char *cmd_line);
+    USBInfoCommand(const char *cmd_line, std::string cmdString);
 
     virtual ~USBInfoCommand() {
     }
@@ -224,7 +234,9 @@ public:
 class ForegroundCommand : public BuiltInCommand {
 public:
     JobsList* jobs;
-    ForegroundCommand(const char *cmd_line, std::string cmdString, JobsList *jobs);
+    int* fgPID;
+
+    ForegroundCommand(const char *cmd_line, std::string cmdString, JobsList *jobs, int* fgPID);
 
     virtual ~ForegroundCommand() {
     }
@@ -285,6 +297,8 @@ private:
     JobsList* jobs;
     std::map<std::string , std::string> aliasMap;
     std::list<std::string> aliasList;
+    int fgPID;
+
     SmallShell();
 public:
     
@@ -305,7 +319,8 @@ public:
 
     char* getplastPwd();
 
-    // TODO: add extra methods as needed
+    int getForegroundPid();
+
 };
 
 #endif //SMASH_COMMAND_H_

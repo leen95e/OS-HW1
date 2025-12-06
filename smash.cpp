@@ -35,11 +35,11 @@ bool checkChprompt (const char* line, std::string* promptPtr){
 
 }
 
+
 int main(int argc, char *argv[]) {
     if (signal(SIGINT, ctrlCHandler) == SIG_ERR) {
         perror("smash error: failed to set ctrl-C handler");
     }
-
     std::string prompt = "smash"; 
     std::string *promptPtr = &prompt;
     SmallShell &smash = SmallShell::getInstance();
